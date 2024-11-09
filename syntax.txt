@@ -1,0 +1,1 @@
+Arithmitic expressions must have a space between each term and operator. Ex: "3 + 5", 3 * (3 + 5) 
