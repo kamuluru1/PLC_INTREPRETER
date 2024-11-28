@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <fstream>
 #include <vector>
+#include <optional>
+#include <unordered_map>
 
 enum TokenType {
     INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF_TOKEN, ID, ASSIGN
@@ -54,75 +56,162 @@ public:
     }
 
     Token id() {
-        std::string result = "";
-        while (current_char != '\0' && std::isalnum(current_char) || current_char == '_') {
-            result += current_char;
-            advance();
-        }
-        return Token(ID, result);
+    std::string result = "";
+    while (current_char != '\0' && (std::isalnum(current_char) || current_char == '_')) {
+        result += current_char;
+        advance();
+    }
+    return Token(ID, result);
+}
+
+    void handle_invalid_character() {
+        std::string error_message = "Invalid character: ";
+        error_message += current_char;
+        throw std::runtime_error(error_message);
     }
 
     Token get_next_token() {
-        while (current_char != '\0') {
-            if (std::isspace(current_char)) {
-                skip_whitespace();
-                continue;
-            }
-
-            if (std::isdigit(current_char)) {
-                return Token(INTEGER, std::to_string(integer()));
-            }
-
-            if (current_char == '+') {
-                advance();
-                return Token(PLUS, "+");
-            }
-
-            if (current_char == '-') {
-                advance();
-                return Token(MINUS, "-");
-            }
-
-            if (current_char == '*') {
-                advance();
-                return Token(MUL, "*");
-            }
-
-            if (current_char == '/') {
-                advance();
-                return Token(DIV, "/");
-            }
-
-            if (current_char == '(') {
-                advance();
-                return Token(LPAREN, "(");
-            }
-
-            if (current_char == ')') {
-                advance();
-                return Token(RPAREN, ")");
-            }
-
-            if (current_char == '=') {
-                advance();
-                return Token(ASSIGN, "=");
-            }
-
-            std::string error_message = "Invalid character: ";
-            error_message += current_char;
-            throw std::runtime_error(error_message);
+    while (current_char != '\0') {
+        if (std::isspace(current_char)) {
+            skip_whitespace();
+            continue;
         }
 
-        return Token(EOF_TOKEN, "");
+        if (std::isdigit(current_char)) {
+            return Token(INTEGER, std::to_string(integer()));
+        }
+
+        if (std::isalpha(current_char)) {
+            return id();
+        }
+
+        if (current_char == '+') {
+            advance();
+            return Token(PLUS, "+");
+        }
+
+        if (current_char == '-') {
+            advance();
+            return Token(MINUS, "-");
+        }
+
+        if (current_char == '*') {
+            advance();
+            return Token(MUL, "*");
+        }
+
+        if (current_char == '/') {
+            advance();
+            return Token(DIV, "/");
+        }
+
+        if (current_char == '(') {
+            advance();
+            return Token(LPAREN, "(");
+        }
+
+        if (current_char == ')') {
+            advance();
+            return Token(RPAREN, ")");
+        }
+
+        if (current_char == '=') {
+            advance();
+            return Token(ASSIGN, "=");
+        }
+
+        handle_invalid_character();
+    }
+
+    return Token(EOF_TOKEN, "");
+}
+};
+
+
+
+class SymbolTable {
+public:
+    // Entry struct to hold type and value
+    struct Entry {
+        std::string type;
+        std::string value; // For simplicity, the value is stored as a string
+    };
+
+private:
+    // Stack to keep track of scopes
+    std::vector<std::unordered_map<std::string, Entry>> scopes;
+
+public:
+    // Constructor initializes with a global scope
+    SymbolTable() { pushScope(); }
+
+    // Add a new scope
+    void pushScope() {
+        scopes.emplace_back();
+    }
+
+    // Remove the most recent scope
+    void popScope() {
+        if (scopes.size() <= 1) { // Prevent removing the global scope
+            throw std::runtime_error("Cannot pop the global scope");
+        }
+        scopes.pop_back();
+    }
+
+    // Add or update a variable in the current scope
+    void addOrUpdate(const std::string& name, const std::string& type, const std::string& value) {
+        if (scopes.empty()) {
+            throw std::runtime_error("No scope available to add variable");
+        }
+        auto& currentScope = scopes.back();
+        // Check for type mismatch if the variable already exists
+        if (currentScope.find(name) != currentScope.end() && currentScope[name].type != type) {
+            throw std::runtime_error("Type mismatch: Cannot update variable with a different type");
+        }
+        currentScope[name] = {type, value};
+    }
+
+    // Retrieve a variable from any scope
+    std::optional<Entry> get(const std::string& name) const {
+        for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) { 
+            const auto& scope = *it;
+            auto found = scope.find(name);
+            if (found != scope.end()) {
+                return found->second;
+            }
+        }
+        return std::nullopt;
+    }
+
+    // Check if a variable exists in the current scope
+    bool existsInCurrentScope(const std::string& name) const {
+        if (scopes.empty()) {
+            throw std::runtime_error("No scope available to check variable");
+        }
+        return scopes.back().find(name) != scopes.back().end();
+    }
+
+    // Print the symbol table for debugging
+    void printTable() const {
+        std::cout << "Symbol Table:\n";
+        for (size_t i = 0; i < scopes.size(); ++i) {
+            std::cout << "Scope " << i << ":\n";
+            for (const auto& [name, entry] : scopes[i]) {
+                std::cout << "  " << name << " -> { Type: " << entry.type << ", Value: " << entry.value << " }\n";
+            }
+        }
     }
 };
+
+
 
 class Parser {
 public:
     Lexer lexer;
     Token current_token;
+    SymbolTable& symbolTable;
 
-    Parser(Lexer lexer_) : lexer(lexer_), current_token(lexer.get_next_token()) {}
+    Parser(Lexer lexer_, SymbolTable& symbolTable_) : lexer(lexer_), current_token(lexer.get_next_token()), symbolTable(symbolTable_) {}
 
     void error() {
         std::string error_message = "Syntax error: unexpected token type ";
@@ -182,6 +271,24 @@ public:
         }
         return result;
     }
+
+    void assignment() {
+        Token token = current_token;
+        if (token.type == ID) {
+            std::string var_name = current_token.value;
+            eat(ID);
+            if (current_token.type == ASSIGN) {
+                eat(ASSIGN);
+                int result = expr();
+                symbolTable.addOrUpdate(var_name, "INTEGER", std::to_string(result));
+            } else {
+                error();
+            }
+        }
+
+    }
+
+    
 };
 
 class Interpreter {
@@ -195,35 +302,14 @@ public:
     }
 };
 
-class SymbolTable {
-public:
-    struct Row {
-        std::string type;
-        std::string name;
-        std::string scope;
-        std::string address;
-        std::string value;
-    };
-
-    std::vector<Row> table;
-
-    void add(const std::string& type, const std::string& name, const std::string& scope,
-         const std::string& address, const std::string& value) {
-        Row new_row{type, name, scope, address, value}; // Aggregate initialization for Row
-        table.push_back(new_row); // Add the row to the table vector
-    }
 
 
-
-};
 
 int main() {
-    // Prompt the user to enter the relative path to the file
     std::string file_path;
     std::cin >> file_path;
 
-    // Try to open the file using the provided relative path
-    std::ifstream file(file_path);
+    std::ifstream file(file_path); // use relative path from root directory
     if (!file.is_open()) {
         std::cerr << "Error: could not open file at " << file_path << std::endl;
         return 1;
@@ -239,12 +325,12 @@ int main() {
 
     // Create lexer, parser, and interpreter
     Lexer lexer(text);
-    Parser parser(lexer);
-    Interpreter interpreter(parser);
-    int result = interpreter.interpret();
+    SymbolTable symbolTable;
+    Parser parser(lexer, symbolTable);
 
-    // Output the result
-    std::cout << result << std::endl;
+    // Perform assignment and print the symbol table
+    parser.assignment();
+    symbolTable.printTable();
 
     return 0;
 }
