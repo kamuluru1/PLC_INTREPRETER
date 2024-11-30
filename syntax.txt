@@ -1,3 +1,9 @@
 Arithmitic expressions must have a space between each term and operator. Ex: "3 + 5", 3 * (3 + 5)
 Print statements must be followed by parentheses with an expression of variables or numbers. 
+
 If statements must use "if", "then", and "end" keywords with proper spacing Valid: "if x > 5 then", "if x == y then" Invalid: "if x>5then", "if x==y then"
+EX: 
+
+if x < y then
+    print(x)
+end
