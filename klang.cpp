@@ -8,7 +8,9 @@
 #include <unordered_map>
 
 enum TokenType {
-    INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF_TOKEN, ID, ASSIGN, COMMA, PRINT
+    INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF_TOKEN, ID, ASSIGN, COMMA, PRINT,
+    EQUAL_TO, NOT_EQUAL_TO, GREATER_THAN, LESS_THAN, GREATER_THAN_OR_EQUAL_TO, LESS_THAN_OR_EQUAL_TO,
+    IF, THEN, END
 };
 
 class Token {
@@ -34,7 +36,7 @@ public:
     void advance() {
         pos++;
         if (pos >= text.size()) {
-            current_char = '\0'; // Null character to indicate end
+            current_char = '\0';
         } else {
             current_char = text[pos];
         }
@@ -72,10 +74,47 @@ public:
                     id += current_char;
                     advance();
                 }
-                if (id == "print") {
-                    return Token(PRINT, "print");
-                }
+                if (id == "print") return Token(PRINT, "print");
+                if (id == "if") return Token(IF, "if");
+                if (id == "then") return Token(THEN, "then");
+                if (id == "end") return Token(END, "end");
                 return Token(ID, id);
+            }
+
+            if (current_char == '=') {
+                advance();
+                if (current_char == '=') {
+                    advance();
+                    return Token(EQUAL_TO, "==");
+                }
+                return Token(ASSIGN, "=");
+            }
+
+            if (current_char == '!') {
+                advance();
+                if (current_char == '=') {
+                    advance();
+                    return Token(NOT_EQUAL_TO, "!=");
+                }
+                throw std::runtime_error("Invalid operator: !");
+            }
+
+            if (current_char == '>') {
+                advance();
+                if (current_char == '=') {
+                    advance();
+                    return Token(GREATER_THAN_OR_EQUAL_TO, ">=");
+                }
+                return Token(GREATER_THAN, ">");
+            }
+
+            if (current_char == '<') {
+                advance();
+                if (current_char == '=') {
+                    advance();
+                    return Token(LESS_THAN_OR_EQUAL_TO, "<=");
+                }
+                return Token(LESS_THAN, "<");
             }
 
             if (current_char == '+') {
@@ -111,11 +150,6 @@ public:
             if (current_char == ',') {
                 advance();
                 return Token(COMMA, ",");
-            }
-
-            if (current_char == '=') {
-                advance();
-                return Token(ASSIGN, "=");
             }
 
             throw std::runtime_error(std::string("Invalid character: ") + current_char);
@@ -158,7 +192,8 @@ public:
     Token current_token;
     SymbolTable& symbolTable;
 
-    Parser(Lexer lexer_, SymbolTable& symbolTable_) : lexer(lexer_), current_token(lexer.get_next_token()), symbolTable(symbolTable_) {}
+    Parser(Lexer lexer_, SymbolTable& symbolTable_) 
+        : lexer(lexer_), current_token(lexer.get_next_token()), symbolTable(symbolTable_) {}
 
     void eat(TokenType token_type) {
         if (current_token.type == token_type) {
@@ -198,7 +233,11 @@ public:
                 result *= factor();
             } else if (token.type == DIV) {
                 eat(DIV);
-                result /= factor();
+                int divisor = factor();
+                if (divisor == 0) {
+                    throw std::runtime_error("Division by zero");
+                }
+                result /= divisor;
             }
         }
         return result;
@@ -217,6 +256,55 @@ public:
             }
         }
         return result;
+    }
+
+    bool condition() {
+        int left = expr();
+        TokenType op = current_token.type;
+        
+        switch(op) {
+            case EQUAL_TO:
+                eat(EQUAL_TO);
+                return left == expr();
+            case NOT_EQUAL_TO:
+                eat(NOT_EQUAL_TO);
+                return left != expr();
+            case GREATER_THAN:
+                eat(GREATER_THAN);
+                return left > expr();
+            case LESS_THAN:
+                eat(LESS_THAN);
+                return left < expr();
+            case GREATER_THAN_OR_EQUAL_TO:
+                eat(GREATER_THAN_OR_EQUAL_TO);
+                return left >= expr();
+            case LESS_THAN_OR_EQUAL_TO:
+                eat(LESS_THAN_OR_EQUAL_TO);
+                return left <= expr();
+            default:
+                throw std::runtime_error("Invalid comparison operator");
+        }
+    }
+
+    void if_statement() {
+        eat(IF);
+        bool cond_result = condition();
+        eat(THEN);
+        
+        if (cond_result) {
+            while (current_token.type != END) {
+                statement();
+            }
+        } else {
+            // Skip statements until END
+            int nesting = 1;
+            while (nesting > 0) {
+                if (current_token.type == IF) nesting++;
+                else if (current_token.type == END) nesting--;
+                current_token = lexer.get_next_token();
+            }
+        }
+        eat(END);
     }
 
     void assignment() {
@@ -247,7 +335,9 @@ public:
     }
 
     void statement() {
-        if (current_token.type == ID) {
+        if (current_token.type == IF) {
+            if_statement();
+        } else if (current_token.type == ID) {
             assignment();
         } else if (current_token.type == PRINT) {
             print_function();
@@ -259,6 +349,7 @@ public:
 
 int main() {
     std::string file_path;
+    std::cout << "Enter the path to your source file: ";
     std::cin >> file_path;
 
     std::ifstream file(file_path);
@@ -270,12 +361,17 @@ int main() {
     std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
-    Lexer lexer(text);
-    SymbolTable symbolTable;
-    Parser parser(lexer, symbolTable);
+    try {
+        Lexer lexer(text);
+        SymbolTable symbolTable;
+        Parser parser(lexer, symbolTable);
 
-    while (parser.current_token.type != EOF_TOKEN) {
-        parser.statement();
+        while (parser.current_token.type != EOF_TOKEN) {
+            parser.statement();
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
     }
 
     return 0;
