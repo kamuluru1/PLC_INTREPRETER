@@ -1,6 +1,14 @@
 x = 10
 y = 5
+a = 1
+b = 2
 if x > y then
+    print(x)
+end
+if a <= b then
+    print(x)
+end
+if a == b then
     print(x)
 end
 print(x + y)

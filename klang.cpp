@@ -187,6 +187,37 @@ public:
 };
 
 class Parser {
+private:
+    void skip_statement() {
+        if (current_token.type == IF) {
+            skip_if_statement();
+        } else if (current_token.type == ID) {
+            eat(ID);
+            eat(ASSIGN);
+            expr();  // Parse but don't execute the expression
+        } else if (current_token.type == PRINT) {
+            eat(PRINT);
+            eat(LPAREN);
+            while (current_token.type != RPAREN) {
+                expr();  // Parse but don't execute the expression
+                if (current_token.type == COMMA) {
+                    eat(COMMA);
+                }
+            }
+            eat(RPAREN);
+        }
+    }
+
+    void skip_if_statement() {
+        eat(IF);
+        condition();  // Parse but don't evaluate the condition
+        eat(THEN);
+        while (current_token.type != END) {
+            skip_statement();
+        }
+        eat(END);
+    }
+
 public:
     Lexer lexer;
     Token current_token;
@@ -296,12 +327,8 @@ public:
                 statement();
             }
         } else {
-            // Skip statements until END
-            int nesting = 1;
-            while (nesting > 0) {
-                if (current_token.type == IF) nesting++;
-                else if (current_token.type == END) nesting--;
-                current_token = lexer.get_next_token();
+            while (current_token.type != END) {
+                skip_statement();
             }
         }
         eat(END);
