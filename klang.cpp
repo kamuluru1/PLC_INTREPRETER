@@ -10,7 +10,7 @@
 enum TokenType {
     INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF_TOKEN, ID, ASSIGN, COMMA, PRINT,
     EQUAL_TO, NOT_EQUAL_TO, GREATER_THAN, LESS_THAN, GREATER_THAN_OR_EQUAL_TO, LESS_THAN_OR_EQUAL_TO,
-    IF, THEN, END
+    IF, THEN, END, AND, OR
 };
 
 class Token {
@@ -78,6 +78,8 @@ public:
                 if (id == "if") return Token(IF, "if");
                 if (id == "then") return Token(THEN, "then");
                 if (id == "end") return Token(END, "end");
+                if (id == "and") return Token(AND, "and");
+                if (id == "or") return Token(OR, "or");
                 return Token(ID, id);
             }
 
@@ -194,12 +196,12 @@ private:
         } else if (current_token.type == ID) {
             eat(ID);
             eat(ASSIGN);
-            expr();  // Parse but don't execute the expression
+            expr();
         } else if (current_token.type == PRINT) {
             eat(PRINT);
             eat(LPAREN);
             while (current_token.type != RPAREN) {
-                expr();  // Parse but don't execute the expression
+                expr();
                 if (current_token.type == COMMA) {
                     eat(COMMA);
                 }
@@ -210,7 +212,7 @@ private:
 
     void skip_if_statement() {
         eat(IF);
-        condition();  // Parse but don't evaluate the condition
+        condition();
         eat(THEN);
         while (current_token.type != END) {
             skip_statement();
@@ -289,7 +291,7 @@ public:
         return result;
     }
 
-    bool condition() {
+    bool simple_condition() {
         int left = expr();
         TokenType op = current_token.type;
         
@@ -315,6 +317,22 @@ public:
             default:
                 throw std::runtime_error("Invalid comparison operator");
         }
+    }
+
+    // Switch to Short Circuit Eval Implementation
+    bool condition() {
+        bool left = simple_condition();
+        while (current_token.type == AND || current_token.type == OR) {
+            Token token = current_token;
+            if (token.type == AND) {
+                eat(AND);
+                left = left && simple_condition();
+            } else if (token.type == OR) {
+                eat(OR);
+                left = left || simple_condition();
+            }
+        }
+        return left;
     }
 
     void if_statement() {
