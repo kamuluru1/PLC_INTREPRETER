@@ -319,20 +319,42 @@ public:
         }
     }
 
-    // Switch to Short Circuit Eval Implementation
+    // Added short circuit eval
     bool condition() {
         bool left = simple_condition();
         while (current_token.type == AND || current_token.type == OR) {
             Token token = current_token;
             if (token.type == AND) {
                 eat(AND);
-                left = left && simple_condition();
+                // Only evaluate right side if left is true
+                if (!left) {
+                    skip_condition(); // Skip evaluating the right side
+                } else {
+                    left = simple_condition();
+                }
             } else if (token.type == OR) {
                 eat(OR);
-                left = left || simple_condition();
+                // Only evaluate right side if left is false
+                if (left) {
+                    skip_condition(); // Skip evaluating the right side
+                } else {
+                    left = simple_condition();
+                }
             }
         }
         return left;
+    }
+
+    // Helper method to skip over a condition without evaluating it
+    void skip_condition() {
+        expr(); // Skip the left expression
+        // Skip the comparison operator
+        if (current_token.type == EQUAL_TO || current_token.type == NOT_EQUAL_TO ||
+            current_token.type == GREATER_THAN || current_token.type == LESS_THAN ||
+            current_token.type == GREATER_THAN_OR_EQUAL_TO || current_token.type == LESS_THAN_OR_EQUAL_TO) {
+            eat(current_token.type);
+            expr(); // Skip the right expression
+        }
     }
 
     void if_statement() {
