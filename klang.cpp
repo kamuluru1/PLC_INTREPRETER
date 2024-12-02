@@ -10,7 +10,7 @@
 enum TokenType {
     INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF_TOKEN, ID, ASSIGN, COMMA, PRINT,
     EQUAL_TO, NOT_EQUAL_TO, GREATER_THAN, LESS_THAN, GREATER_THAN_OR_EQUAL_TO, LESS_THAN_OR_EQUAL_TO,
-    IF, THEN, END, AND, OR, FOR, TO
+    IF, THEN, END, AND, OR, FOR, TO, WHILE
 };
 
 class Token {
@@ -68,7 +68,8 @@ public:
             {"and", AND},
             {"or", OR},
             {"for", FOR},
-            {"to", TO}
+            {"to", TO},
+            {"while", WHILE}
         };
 
         auto it = keywords.find(id);
@@ -196,6 +197,8 @@ private:
             skip_if_statement();
         } else if (current_token.type == FOR) {
             skip_for_statement();
+        } else if (current_token.type == WHILE) {
+            skip_while_statement();
         } else if (current_token.type == ID) {
             eat(ID);
             eat(ASSIGN);
@@ -230,6 +233,16 @@ private:
         expr();
         eat(TO);
         expr();
+        while (current_token.type != END) {
+            skip_statement();
+        }
+        eat(END);
+    }
+
+    void skip_while_statement() {
+        eat(WHILE);
+        condition();
+        eat(THEN);
         while (current_token.type != END) {
             skip_statement();
         }
@@ -368,6 +381,34 @@ public:
         }
     }
 
+    void while_statement() {
+        eat(WHILE);
+        
+        size_t condition_pos = lexer.pos;
+        Token condition_token = current_token;
+        
+        bool cond_result = condition();
+        eat(THEN);
+        
+        while (cond_result) {
+            while (current_token.type != END) {
+                statement();
+            }
+            
+            lexer.pos = condition_pos;
+            lexer.current_char = lexer.text[lexer.pos];
+            current_token = condition_token;
+            
+            cond_result = condition();
+            eat(THEN);
+        }
+        
+        while (current_token.type != END) {
+            skip_statement();
+        }
+        eat(END);
+    }
+
     void for_statement() {
         eat(FOR);
         std::string var_name = current_token.value;
@@ -451,6 +492,8 @@ public:
             if_statement();
         } else if (current_token.type == FOR) {
             for_statement();
+        } else if (current_token.type == WHILE) {
+            while_statement();
         } else if (current_token.type == ID) {
             assignment();
         } else if (current_token.type == PRINT) {
