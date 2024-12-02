@@ -6,6 +6,7 @@
 #include <vector>
 #include <optional>
 #include <unordered_map>
+#include <memory>
 
 enum TokenType {
     INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF_TOKEN, ID, ASSIGN, COMMA, PRINT,
@@ -16,9 +17,9 @@ enum TokenType {
 class Token {
 public:
     TokenType type;
-    std::string value; // Value is used for INTEGER tokens
+    std::string value;
 
-    Token(const TokenType type_, std::string value_) : type(type_), value(value_) {} 
+    Token(const TokenType type_, std::string value_) : type(type_), value(value_) {}
 
     void print() const {
         std::cout << "Token(" << type << ", " << value << ")" << std::endl;
@@ -27,13 +28,12 @@ public:
 
 class Lexer {
 public:
-    std::string text; // Input code from the test.txt file
-    size_t pos; // Current position in the text
-    char current_char; // Current character being analyzed
+    std::string text;
+    size_t pos;
+    char current_char;
 
     Lexer(const std::string& text_) : text(text_), pos(0), current_char(text[pos]) {}
 
-    // Method to advance the 'pos' pointer and set the 'current_char' variable
     void advance() {
         pos++;
         current_char = (pos >= text.size()) ? '\0' : text[pos];
@@ -45,7 +45,6 @@ public:
         }
     }
 
-    // Method to create an integer from a sequence of digits. (Ex. 123 will become INTEGER(123) instead of INTEGER(1), INTEGER(2), INTEGER(3))
     int integer() {
         std::string result;
         while (current_char != '\0' && std::isdigit(current_char)) {
@@ -62,7 +61,6 @@ public:
             advance();
         }
 
-        // Check if the identifier is a keyword in the language
         static const std::unordered_map<std::string, TokenType> keywords = {
             {"print", PRINT},
             {"if", IF},
@@ -78,8 +76,7 @@ public:
         auto it = keywords.find(id);
         return it != keywords.end() ? Token(it->second, id) : Token(ID, id);
     }
-    
-    // Handles cases when an operator is found and only returns that type of token
+
     Token handle_operator() {
         char op = current_char;
         advance();
@@ -91,21 +88,18 @@ public:
                     return Token(EQUAL_TO, "==");
                 }
                 return Token(ASSIGN, "=");
-
             case '!':
                 if (current_char == '=') {
                     advance();
                     return Token(NOT_EQUAL_TO, "!=");
                 }
                 throw std::runtime_error("Invalid operator: !");
-
             case '>':
                 if (current_char == '=') {
                     advance();
                     return Token(GREATER_THAN_OR_EQUAL_TO, ">=");
                 }
                 return Token(GREATER_THAN, ">");
-
             case '<':
                 if (current_char == '=') {
                     advance();
@@ -137,7 +131,6 @@ public:
                 case '>':
                 case '<':
                     return handle_operator();
-
                 case '+':
                     advance();
                     return Token(PLUS, "+");
@@ -167,27 +160,23 @@ public:
     }
 };
 
-
 class SymbolTable {
 public:
-
-    // Information about a variable to be stored in the symbol table
     struct Entry {
         std::string type;
         std::string value;
-    }; 
+    };
 
 private:
-    std::unordered_map<std::string, Entry> table; // A vector made up of entries
+    std::unordered_map<std::string, Entry> table;
 
 public:
-
     void addOrUpdate(const std::string& name, const std::string& type, const std::string& value) {
         if (table.find(name) != table.end() && table[name].type != type) {
             throw std::runtime_error("Type mismatch for variable: " + name);
         }
         table[name] = {type, value};
-    } // Checks if the variable is already in the table. If not a new entry is added, and if not the existing entry is updated.
+    }
 
     std::optional<Entry> get(const std::string& name) const {
         auto it = table.find(name);
@@ -195,83 +184,330 @@ public:
             return it->second;
         }
         return std::nullopt;
-    } // The get method is to retrieve the value of a variable from the table. It will return std::nullopt if the variable is not in the table.
+    }
+};
+
+// Forward declarations for AST nodes
+class AST;
+class BinaryOpNode;
+class NumberNode;
+class VariableNode;
+class AssignNode;
+class PrintNode;
+class IfNode;
+class WhileNode;
+class ForNode;
+class ComparisonNode;
+class LogicalOpNode;
+
+// Visitor interface
+class ASTVisitor {
+public:
+    virtual void visit(BinaryOpNode* node) = 0;
+    virtual void visit(NumberNode* node) = 0;
+    virtual void visit(VariableNode* node) = 0;
+    virtual void visit(AssignNode* node) = 0;
+    virtual void visit(PrintNode* node) = 0;
+    virtual void visit(IfNode* node) = 0;
+    virtual void visit(WhileNode* node) = 0;
+    virtual void visit(ForNode* node) = 0;
+    virtual void visit(ComparisonNode* node) = 0;
+    virtual void visit(LogicalOpNode* node) = 0;
+    virtual ~ASTVisitor() = default;
+};
+
+// Base AST node class
+class AST {
+public:
+    virtual ~AST() = default;
+    virtual void accept(ASTVisitor& visitor) = 0;
+};
+
+// Node implementations
+class BinaryOpNode : public AST {
+public:
+    TokenType op;
+    std::unique_ptr<AST> left;
+    std::unique_ptr<AST> right;
+
+    BinaryOpNode(TokenType op_, std::unique_ptr<AST> left_, std::unique_ptr<AST> right_)
+        : op(op_), left(std::move(left_)), right(std::move(right_)) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+class NumberNode : public AST {
+public:
+    int value;
+
+    explicit NumberNode(int value_) : value(value_) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+class VariableNode : public AST {
+public:
+    std::string name;
+
+    explicit VariableNode(std::string name_) : name(std::move(name_)) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+class AssignNode : public AST {
+public:
+    std::string name;
+    std::unique_ptr<AST> value;
+
+    AssignNode(std::string name_, std::unique_ptr<AST> value_)
+        : name(std::move(name_)), value(std::move(value_)) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+class PrintNode : public AST {
+public:
+    std::vector<std::unique_ptr<AST>> expressions;
+
+    explicit PrintNode(std::vector<std::unique_ptr<AST>> expressions_)
+        : expressions(std::move(expressions_)) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+class ComparisonNode : public AST {
+public:
+    TokenType op;
+    std::unique_ptr<AST> left;
+    std::unique_ptr<AST> right;
+
+    ComparisonNode(TokenType op_, std::unique_ptr<AST> left_, std::unique_ptr<AST> right_)
+        : op(op_), left(std::move(left_)), right(std::move(right_)) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+class LogicalOpNode : public AST {
+public:
+    TokenType op;
+    std::unique_ptr<AST> left;
+    std::unique_ptr<AST> right;
+
+    LogicalOpNode(TokenType op_, std::unique_ptr<AST> left_, std::unique_ptr<AST> right_)
+        : op(op_), left(std::move(left_)), right(std::move(right_)) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+class IfNode : public AST {
+public:
+    std::unique_ptr<AST> condition;
+    std::vector<std::unique_ptr<AST>> body;
+
+    IfNode(std::unique_ptr<AST> condition_, std::vector<std::unique_ptr<AST>> body_)
+        : condition(std::move(condition_)), body(std::move(body_)) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+class WhileNode : public AST {
+public:
+    std::unique_ptr<AST> condition;
+    std::vector<std::unique_ptr<AST>> body;
+
+    WhileNode(std::unique_ptr<AST> condition_, std::vector<std::unique_ptr<AST>> body_)
+        : condition(std::move(condition_)), body(std::move(body_)) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+class ForNode : public AST {
+public:
+    std::string var_name;
+    std::unique_ptr<AST> start;
+    std::unique_ptr<AST> end;
+    std::vector<std::unique_ptr<AST>> body;
+
+    ForNode(std::string var_name_, std::unique_ptr<AST> start_, std::unique_ptr<AST> end_,
+            std::vector<std::unique_ptr<AST>> body_)
+        : var_name(std::move(var_name_)), start(std::move(start_)), end(std::move(end_)),
+          body(std::move(body_)) {}
+
+    void accept(ASTVisitor& visitor) override {
+        visitor.visit(this);
+    }
+};
+
+// Interpreter class
+class Interpreter : public ASTVisitor {
+private:
+    SymbolTable& symbolTable;
+    std::optional<int> lastValue;
+
+public:
+    explicit Interpreter(SymbolTable& symbolTable_) : symbolTable(symbolTable_) {}
+
+    void visit(BinaryOpNode* node) override {
+        node->left->accept(*this);
+        int left = lastValue.value();
+        node->right->accept(*this);
+        int right = lastValue.value();
+
+        switch (node->op) {
+            case PLUS:
+                lastValue = left + right;
+                break;
+            case MINUS:
+                lastValue = left - right;
+                break;
+            case MUL:
+                lastValue = left * right;
+                break;
+            case DIV:
+                if (right == 0) throw std::runtime_error("Division by zero");
+                lastValue = left / right;
+                break;
+            default:
+                throw std::runtime_error("Invalid binary operator");
+        }
+    }
+
+    void visit(NumberNode* node) override {
+        lastValue = node->value;
+    }
+
+    void visit(VariableNode* node) override {
+        auto entry = symbolTable.get(node->name);
+        if (!entry) {
+            throw std::runtime_error("Undefined variable: " + node->name);
+        }
+        lastValue = std::stoi(entry->value);
+    }
+
+    void visit(AssignNode* node) override {
+        node->value->accept(*this);
+        symbolTable.addOrUpdate(node->name, "INTEGER", std::to_string(lastValue.value()));
+    }
+
+    void visit(PrintNode* node) override {
+        bool first = true;
+        for (const auto& expr : node->expressions) {
+            if (!first) std::cout << " ";
+            expr->accept(*this);
+            std::cout << lastValue.value();
+            first = false;
+        }
+        std::cout << std::endl;
+    }
+
+    void visit(ComparisonNode* node) override {
+        node->left->accept(*this);
+        int left = lastValue.value();
+        node->right->accept(*this);
+        int right = lastValue.value();
+
+        switch (node->op) {
+            case EQUAL_TO:
+                lastValue = left == right;
+                break;
+            case NOT_EQUAL_TO:
+                lastValue = left != right;
+                break;
+            case GREATER_THAN:
+                lastValue = left > right;
+                break;
+            case LESS_THAN:
+                lastValue = left < right;
+                break;
+            case GREATER_THAN_OR_EQUAL_TO:
+                lastValue = left >= right;
+                break;
+            case LESS_THAN_OR_EQUAL_TO:
+                lastValue = left <= right;
+                break;
+            default:
+                throw std::runtime_error("Invalid comparison operator");
+        }
+    }
+
+    void visit(LogicalOpNode* node) override {
+        node->left->accept(*this);
+        bool left = lastValue.value();
+
+        if (node->op == AND && !left) {
+            lastValue = false;
+            return;
+        }
+        if (node->op == OR && left) {
+            lastValue = true;
+            return;
+        }
+
+        node->right->accept(*this);
+        bool right = lastValue.value();
+
+        lastValue = (node->op == AND) ? (left && right) : (left || right);
+    }
+
+    void visit(IfNode* node) override {
+        node->condition->accept(*this);
+        if (lastValue.value()) {
+            for (const auto& stmt : node->body) {
+                stmt->accept(*this);
+            }
+        }
+    }
+
+    void visit(WhileNode* node) override {
+        while (true) {
+            node->condition->accept(*this);
+            if (!lastValue.value()) break;
+            
+            for (const auto& stmt : node->body) {
+                stmt->accept(*this);
+            }
+        }
+    }
+
+    void visit(ForNode* node) override {
+        node->start->accept(*this);
+        int start = lastValue.value();
+        node->end->accept(*this);
+        int end = lastValue.value();
+
+        for (int i = start; i <= end; i++) {
+            symbolTable.addOrUpdate(node->var_name, "INTEGER", std::to_string(i));
+            for (const auto& stmt : node->body) {
+                stmt->accept(*this);
+            }
+        }
+    }
 };
 
 class Parser {
 private:
-
-    // Skips over a statement that doesn't need to be executed(Ex. false consition)
-    void skip_statement() {
-        if (current_token.type == IF) {
-            skip_if_statement();
-        } else if (current_token.type == FOR) {
-            skip_for_statement();
-        } else if (current_token.type == WHILE) {
-            skip_while_statement();
-        } else if (current_token.type == ID) {
-            eat(ID);
-            eat(ASSIGN);
-            expr();
-        } else if (current_token.type == PRINT) {
-            eat(PRINT);
-            eat(LPAREN);
-            while (current_token.type != RPAREN) {
-                expr();
-                if (current_token.type == COMMA) {
-                    eat(COMMA);
-                }
-            }
-            eat(RPAREN);
-        }
-    }
-
-
-    // Skips if statement if the condition is false
-    void skip_if_statement() {
-        eat(IF);
-        condition();
-        eat(THEN);
-        while (current_token.type != END) {
-            skip_statement();
-        }
-        eat(END);
-    }
-
-    // Skips for loop if condition is not met
-    void skip_for_statement() {
-        eat(FOR);
-        eat(ID);
-        eat(ASSIGN);
-        expr();
-        eat(TO);
-        expr();
-        while (current_token.type != END) {
-            skip_statement();
-        }
-        eat(END);
-    }
-
-    // Skips while loop the condition is not met.
-    void skip_while_statement() {
-        eat(WHILE);
-        condition();
-        eat(THEN);
-        while (current_token.type != END) {
-            skip_statement();
-        }
-        eat(END);
-    }
-
-public:
     Lexer lexer;
     Token current_token;
     SymbolTable& symbolTable;
 
-    Parser(Lexer lexer_, SymbolTable& symbolTable_) 
-        : lexer(lexer_), current_token(lexer.get_next_token()), symbolTable(symbolTable_) {}
-
-    // Consumes the current token if it matches the expected token type
     void eat(TokenType token_type) {
         if (current_token.type == token_type) {
             current_token = lexer.get_next_token();
@@ -280,305 +516,170 @@ public:
         }
     }
 
-    /* 
-    Method to evaluate expressions and the result. 
-    If the token type is INTEGER it will get the value from the token. 
-    If the type is ID it will look up the variable in the symbol table and use that value in evaluating expressions.
-    */  
-    int factor() {
+    std::unique_ptr<AST> factor() {
         Token token = current_token;
         if (token.type == INTEGER) {
             eat(INTEGER);
-            return std::stoi(token.value);
+            return std::make_unique<NumberNode>(std::stoi(token.value));
         } else if (token.type == ID) {
-            auto entry = symbolTable.get(token.value);
-            if (!entry) {
-                throw std::runtime_error("Undefined variable: " + token.value);
-            }
             eat(ID);
-            return std::stoi(entry->value);
+            return std::make_unique<VariableNode>(token.value);
         } else if (token.type == LPAREN) {
             eat(LPAREN);
-            int result = expr();
+            auto node = expr();
             eat(RPAREN);
-            return result;
+            return node;
         }
         throw std::runtime_error("Syntax error in factor");
     }
 
-    // Returns a term that can be added, subtracted, multiplied, or divided. It starts by evaluating a factor and storing the result
-    int term() {
-        int result = factor();
+    std::unique_ptr<AST> term() {
+        auto node = factor();
+
         while (current_token.type == MUL || current_token.type == DIV) {
             Token token = current_token;
-            if (token.type == MUL) {
-                eat(MUL);
-                result *= factor();
-            } else if (token.type == DIV) {
-                eat(DIV);
-                int divisor = factor();
-                if (divisor == 0) {
-                    throw std::runtime_error("Division by zero");
-                }
-                result /= divisor;
-            }
+            eat(token.type);
+            node = std::make_unique<BinaryOpNode>(token.type, std::move(node), factor());
         }
-        return result;
+        return node;
     }
 
-    /* 
-    Evaluates the expression by adding or subtracting terms. 
-    It starts by evaluating a term and storing the result. 
-    It then checks if the current token is a plus or minus operator and adds or subtracts the next term accordingly. 
-    */
-    int expr() {
-        int result = term();
+    std::unique_ptr<AST> expr() {
+        auto node = term();
+
         while (current_token.type == PLUS || current_token.type == MINUS) {
             Token token = current_token;
-            if (token.type == PLUS) {
-                eat(PLUS);
-                result += term();
-            } else if (token.type == MINUS) {
-                eat(MINUS);
-                result -= term();
-            }
+            eat(token.type);
+            node = std::make_unique<BinaryOpNode>(token.type, std::move(node), term());
         }
-        return result;
+        return node;
     }
 
-    /*
-    Evaluates a simple condition by comparing two expressions with a comparison operator.
-    It starts by evaluating the left expression and storing the result in the 'left' variable.
-    It then checks the current token type and compares the left expression with the right expression.
-    If the operator is not recognized, it will throw a runtime error.
-    */
-    bool simple_condition() {
-        int left = expr();
+    std::unique_ptr<AST> simple_condition() {
+        auto left = expr();
         TokenType op = current_token.type;
         
         switch(op) {
             case EQUAL_TO:
-                eat(EQUAL_TO);
-                return left == expr();
             case NOT_EQUAL_TO:
-                eat(NOT_EQUAL_TO);
-                return left != expr();
             case GREATER_THAN:
-                eat(GREATER_THAN);
-                return left > expr();
             case LESS_THAN:
-                eat(LESS_THAN);
-                return left < expr();
             case GREATER_THAN_OR_EQUAL_TO:
-                eat(GREATER_THAN_OR_EQUAL_TO);
-                return left >= expr();
             case LESS_THAN_OR_EQUAL_TO:
-                eat(LESS_THAN_OR_EQUAL_TO);
-                return left <= expr();
+                eat(op);
+                return std::make_unique<ComparisonNode>(op, std::move(left), expr());
             default:
                 throw std::runtime_error("Invalid comparison operator");
         }
     }
 
-    /*
-    Evaluates conditional expressions that use more complex operators like AND and OR. 
-    It builds on the simple_condition method my evaluating the left expression and storing the result in the 'left' variable. 
-    It uses short circut evaluation by evaluating the left side of the expression first. 
-    If the left side is false and the operator is AND, it will skip the right side by using the skip_condition method. 
-    */
-    bool condition() {
-        bool left = simple_condition();
+    std::unique_ptr<AST> condition() {
+        auto node = simple_condition();
+
         while (current_token.type == AND || current_token.type == OR) {
             Token token = current_token;
-            if (token.type == AND) {
-                eat(AND);
-                if (!left) {
-                    skip_condition();
-                } else {
-                    left = simple_condition();
-                }
-            } else if (token.type == OR) {
-                eat(OR);
-                if (left) {
-                    skip_condition();
-                } else {
-                    left = simple_condition();
-                }
-            }
+            eat(token.type);
+            node = std::make_unique<LogicalOpNode>(token.type, std::move(node), simple_condition());
         }
-        return left;
+        return node;
     }
 
-    /*
-    This method is used to skip over a conditional expression without evaluating the result. 
-    This is implemented in short circut evaluation 
-    */
-    void skip_condition() {
-        expr();
-        if (current_token.type == EQUAL_TO || current_token.type == NOT_EQUAL_TO ||
-            current_token.type == GREATER_THAN || current_token.type == LESS_THAN ||
-            current_token.type == GREATER_THAN_OR_EQUAL_TO || current_token.type == LESS_THAN_OR_EQUAL_TO) {
-            eat(current_token.type);
-            expr();
-        }
-    }
-
-    /*
-    This method begind by consuming a WHILE token and storing the position and token in the 'condition_pos' and 'condition_token' variables.
-    It then evaluates the loop condition by calling the condition method, which results a boolean result. 
-    It then condumes the THEN token and enters a while loop that will continue to execute the statements until the loop condition is false.
-    It will excecute all the statements until it reached an END token.
-    */
-    void while_statement() {
-        eat(WHILE);
-        
-        size_t condition_pos = lexer.pos;
-        Token condition_token = current_token;
-        
-        bool cond_result = condition();
+    std::unique_ptr<AST> if_statement() {
+        eat(IF);
+        auto cond = condition();
         eat(THEN);
         
-        while (cond_result) {
-            while (current_token.type != END) {
-                statement();
-            }
-            
-            lexer.pos = condition_pos;
-            lexer.current_char = lexer.text[lexer.pos];
-            current_token = condition_token;
-            
-            cond_result = condition();
-            eat(THEN);
-        }
-        
+        std::vector<std::unique_ptr<AST>> body;
         while (current_token.type != END) {
-            skip_statement();
+            body.push_back(statement());
         }
         eat(END);
+        
+        return std::make_unique<IfNode>(std::move(cond), std::move(body));
     }
 
-    /*
-    This method consumes a FOR token and stores the variable name in the 'var_name' variable.
-    It is responsible for starting the excecution of a for loop. The method evaluates the starting expression using the expr method and stores the result in the start variable.
-    It then consumes the TO token and evaluates the ending expression, storing the result in the end variable.
-    The method enters a while loop that will continue to execute the statements until the loop condition is false.
-    After the loop condition evaluates to false, the loop will end.
-    */
-    void for_statement() {
+    std::unique_ptr<AST> while_statement() {
+        eat(WHILE);
+        auto cond = condition();
+        eat(THEN);
+        
+        std::vector<std::unique_ptr<AST>> body;
+        while (current_token.type != END) {
+            body.push_back(statement());
+        }
+        eat(END);
+        
+        return std::make_unique<WhileNode>(std::move(cond), std::move(body));
+    }
+
+    std::unique_ptr<AST> for_statement() {
         eat(FOR);
         std::string var_name = current_token.value;
         eat(ID);
         eat(ASSIGN);
-        int start = expr();
+        auto start = expr();
         eat(TO);
-        int end = expr();
+        auto end = expr();
         
-        symbolTable.addOrUpdate(var_name, "INTEGER", std::to_string(start));
-        
-        size_t loop_start_pos = lexer.pos;
-        Token loop_start_token = current_token;
-        
-        while (std::stoi(symbolTable.get(var_name)->value) <= end) {
-            size_t current_pos = lexer.pos;
-            Token current_token_save = current_token;
-            
-            while (current_token.type != END) {
-                statement();
-            }
-            
-            int current_val = std::stoi(symbolTable.get(var_name)->value);
-            symbolTable.addOrUpdate(var_name, "INTEGER", std::to_string(current_val + 1));
-            
-            if (current_val < end) {
-                lexer.pos = loop_start_pos;
-                lexer.current_char = lexer.text[lexer.pos];
-                current_token = loop_start_token;
-            }
+        std::vector<std::unique_ptr<AST>> body;
+        while (current_token.type != END) {
+            body.push_back(statement());
         }
         eat(END);
-    }
-
-    /*
-    This method consumes an IF token once encountered and evaluates the condition using the condition method and stores the boolean value in the 'cond_result' variable.
-    It then consumes the THEN token and if the cond_result is true, it will execute all the statements until it reaches the END token.
-    */
-    void if_statement() {
-        eat(IF);
-        bool cond_result = condition();
-        eat(THEN);
         
-        if (cond_result) {
-            while (current_token.type != END) {
-                statement();
-            }
-        } else {
-            while (current_token.type != END) {
-                skip_statement();
-            }
-        }
-        eat(END);
+        return std::make_unique<ForNode>(std::move(var_name), std::move(start), std::move(end), std::move(body));
     }
 
-    /* 
-    If a variable is encountered, the ID token (variable) is consumed and the ASSIGN token is consumed.
-    It then evaluates the expression or value using the 'expr' method and stores the variable in the symbol table via the addOrUpdate method.
-    */
-    void assignment() {
+    std::unique_ptr<AST> print_statement() {
+        eat(PRINT);
+        eat(LPAREN);
+        std::vector<std::unique_ptr<AST>> expressions;
+        
+        expressions.push_back(expr());
+        while (current_token.type == COMMA) {
+            eat(COMMA);
+            expressions.push_back(expr());
+        }
+        
+        eat(RPAREN);
+        return std::make_unique<PrintNode>(std::move(expressions));
+    }
+
+    std::unique_ptr<AST> assignment_statement() {
         std::string var_name = current_token.value;
         eat(ID);
         eat(ASSIGN);
-        int result = expr();
-        symbolTable.addOrUpdate(var_name, "INTEGER", std::to_string(result));
+        return std::make_unique<AssignNode>(var_name, expr());
     }
 
-    /* 
-    If a PRINT token is encountered followed by an LPAREN token, the method will evaluate the expression using the 'expr' method until the RPAREN token is encountered.
-    The method will print the value of the expression to the console.
-    The 'first' variable is used to determine if a space is needed between the values.
-    It can handle multiple expressions seperated by commas.
-    */
-    void print_function() {
-        eat(PRINT);
-        eat(LPAREN);
-        bool first = true;
-        while (current_token.type != RPAREN) {
-            if (!first) {
-                std::cout << " ";
-            }
-            int value = expr();
-            std::cout << value;
-            if (current_token.type == COMMA) {
-                eat(COMMA);
-            }
-            first = false;
-        }
-        eat(RPAREN);
-        std::cout << std::endl;
+public:
+    Parser(Lexer lexer_, SymbolTable& symbolTable_) 
+        : lexer(lexer_), current_token(lexer.get_next_token()), symbolTable(symbolTable_) {}
+    
+    TokenType current_token_type() const {
+        return current_token.type;
     }
 
-    /*
-    This method handles the execution of different statements in the source code. It determines the type of statement and calls the respective method.
-    If the current token doesnt match any of these, it will throw a runtime error.
-    */
-    void statement() {
-        if (current_token.type == IF) {
-            if_statement();
-        } else if (current_token.type == FOR) {
-            for_statement();
-        } else if (current_token.type == WHILE) {
-            while_statement();
-        } else if (current_token.type == ID) {
-            assignment();
-        } else if (current_token.type == PRINT) {
-            print_function();
-        } else {
-            throw std::runtime_error("Syntax error in statement");
+    std::unique_ptr<AST> statement() {
+        switch (current_token.type) {
+            case IF:
+                return if_statement();
+            case FOR:
+                return for_statement();
+            case WHILE:
+                return while_statement();
+            case ID:
+                return assignment_statement();
+            case PRINT:
+                return print_statement();
+            default:
+                throw std::runtime_error("Invalid statement");
         }
     }
 };
 
 int main() {
-    std::string file_path; // ./test.txt
+    std::string file_path;
     std::cin >> file_path;
 
     std::ifstream file(file_path);
@@ -593,10 +694,12 @@ int main() {
     try {
         Lexer lexer(text);
         SymbolTable symbolTable;
-        Parser parser(lexer, symbolTable); // The parser takes the lexer and symbol table as arguments because it needs to access the lexer to get tokens and the symbol table to store variables.
+        Parser parser(lexer, symbolTable);
+        Interpreter interpreter(symbolTable);
 
-        while (parser.current_token.type != EOF_TOKEN) {
-            parser.statement();
+        while (parser.current_token_type() != EOF_TOKEN) {
+            auto ast = parser.statement();
+            ast->accept(interpreter);
         }
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
