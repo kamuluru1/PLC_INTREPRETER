@@ -6,3 +6,21 @@ while sum < 100 then
     sum = sum + 1
 end
 print(sum)
+print(1 * 1)
+x = 10
+y = 5
+a = 1
+b = 2
+if x > y then 
+    print(x) 
+end
+if a == 5 or a > b then 
+    print(x) 
+end
+if a == 1 and a < b then 
+    print(x) 
+end
+if a == 1 and a > b then 
+    print(x) 
+end
+print(x + y)
