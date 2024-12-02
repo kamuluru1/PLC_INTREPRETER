@@ -35,11 +35,7 @@ public:
 
     void advance() {
         pos++;
-        if (pos >= text.size()) {
-            current_char = '\0';
-        } else {
-            current_char = text[pos];
-        }
+        current_char = (pos >= text.size()) ? '\0' : text[pos];
     }
 
     void skip_whitespace() {
@@ -49,12 +45,68 @@ public:
     }
 
     int integer() {
-        std::string result = "";
+        std::string result;
         while (current_char != '\0' && std::isdigit(current_char)) {
             result += current_char;
             advance();
         }
         return std::stoi(result);
+    }
+
+    Token handle_identifier() {
+        std::string id;
+        while (current_char != '\0' && (std::isalnum(current_char) || current_char == '_')) {
+            id += current_char;
+            advance();
+        }
+
+        static const std::unordered_map<std::string, TokenType> keywords = {
+            {"print", PRINT},
+            {"if", IF},
+            {"then", THEN},
+            {"end", END},
+            {"and", AND},
+            {"or", OR}
+        };
+
+        auto it = keywords.find(id);
+        return it != keywords.end() ? Token(it->second, id) : Token(ID, id);
+    }
+
+    Token handle_operator() {
+        char op = current_char;
+        advance();
+        
+        switch (op) {
+            case '=':
+                if (current_char == '=') {
+                    advance();
+                    return Token(EQUAL_TO, "==");
+                }
+                return Token(ASSIGN, "=");
+
+            case '!':
+                if (current_char == '=') {
+                    advance();
+                    return Token(NOT_EQUAL_TO, "!=");
+                }
+                throw std::runtime_error("Invalid operator: !");
+
+            case '>':
+                if (current_char == '=') {
+                    advance();
+                    return Token(GREATER_THAN_OR_EQUAL_TO, ">=");
+                }
+                return Token(GREATER_THAN, ">");
+
+            case '<':
+                if (current_char == '=') {
+                    advance();
+                    return Token(LESS_THAN_OR_EQUAL_TO, "<=");
+                }
+                return Token(LESS_THAN, "<");
+        }
+        throw std::runtime_error(std::string("Invalid operator: ") + op);
     }
 
     Token get_next_token() {
@@ -69,94 +121,41 @@ public:
             }
 
             if (std::isalpha(current_char)) {
-                std::string id = "";
-                while (current_char != '\0' && (std::isalnum(current_char) || current_char == '_')) {
-                    id += current_char;
+                return handle_identifier();
+            }
+
+            switch (current_char) {
+                case '=':
+                case '!':
+                case '>':
+                case '<':
+                    return handle_operator();
+
+                case '+':
                     advance();
-                }
-                if (id == "print") return Token(PRINT, "print");
-                if (id == "if") return Token(IF, "if");
-                if (id == "then") return Token(THEN, "then");
-                if (id == "end") return Token(END, "end");
-                if (id == "and") return Token(AND, "and");
-                if (id == "or") return Token(OR, "or");
-                return Token(ID, id);
-            }
-
-            if (current_char == '=') {
-                advance();
-                if (current_char == '=') {
+                    return Token(PLUS, "+");
+                case '-':
                     advance();
-                    return Token(EQUAL_TO, "==");
-                }
-                return Token(ASSIGN, "=");
-            }
-
-            if (current_char == '!') {
-                advance();
-                if (current_char == '=') {
+                    return Token(MINUS, "-");
+                case '*':
                     advance();
-                    return Token(NOT_EQUAL_TO, "!=");
-                }
-                throw std::runtime_error("Invalid operator: !");
-            }
-
-            if (current_char == '>') {
-                advance();
-                if (current_char == '=') {
+                    return Token(MUL, "*");
+                case '/':
                     advance();
-                    return Token(GREATER_THAN_OR_EQUAL_TO, ">=");
-                }
-                return Token(GREATER_THAN, ">");
-            }
-
-            if (current_char == '<') {
-                advance();
-                if (current_char == '=') {
+                    return Token(DIV, "/");
+                case '(':
                     advance();
-                    return Token(LESS_THAN_OR_EQUAL_TO, "<=");
-                }
-                return Token(LESS_THAN, "<");
+                    return Token(LPAREN, "(");
+                case ')':
+                    advance();
+                    return Token(RPAREN, ")");
+                case ',':
+                    advance();
+                    return Token(COMMA, ",");
+                default:
+                    throw std::runtime_error(std::string("Invalid character: ") + current_char);
             }
-
-            if (current_char == '+') {
-                advance();
-                return Token(PLUS, "+");
-            }
-
-            if (current_char == '-') {
-                advance();
-                return Token(MINUS, "-");
-            }
-
-            if (current_char == '*') {
-                advance();
-                return Token(MUL, "*");
-            }
-
-            if (current_char == '/') {
-                advance();
-                return Token(DIV, "/");
-            }
-
-            if (current_char == '(') {
-                advance();
-                return Token(LPAREN, "(");
-            }
-
-            if (current_char == ')') {
-                advance();
-                return Token(RPAREN, ")");
-            }
-
-            if (current_char == ',') {
-                advance();
-                return Token(COMMA, ",");
-            }
-
-            throw std::runtime_error(std::string("Invalid character: ") + current_char);
         }
-
         return Token(EOF_TOKEN, "");
     }
 };
