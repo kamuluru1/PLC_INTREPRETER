@@ -10,7 +10,7 @@
 enum TokenType {
     INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF_TOKEN, ID, ASSIGN, COMMA, PRINT,
     EQUAL_TO, NOT_EQUAL_TO, GREATER_THAN, LESS_THAN, GREATER_THAN_OR_EQUAL_TO, LESS_THAN_OR_EQUAL_TO,
-    IF, THEN, END, AND, OR
+    IF, THEN, END, AND, OR, FOR, TO, WHILE
 };
 
 class Token {
@@ -66,7 +66,10 @@ public:
             {"then", THEN},
             {"end", END},
             {"and", AND},
-            {"or", OR}
+            {"or", OR},
+            {"for", FOR},
+            {"to", TO},
+            {"while", WHILE}
         };
 
         auto it = keywords.find(id);
@@ -192,6 +195,10 @@ private:
     void skip_statement() {
         if (current_token.type == IF) {
             skip_if_statement();
+        } else if (current_token.type == FOR) {
+            skip_for_statement();
+        } else if (current_token.type == WHILE) {
+            skip_while_statement();
         } else if (current_token.type == ID) {
             eat(ID);
             eat(ASSIGN);
@@ -211,6 +218,29 @@ private:
 
     void skip_if_statement() {
         eat(IF);
+        condition();
+        eat(THEN);
+        while (current_token.type != END) {
+            skip_statement();
+        }
+        eat(END);
+    }
+
+    void skip_for_statement() {
+        eat(FOR);
+        eat(ID);
+        eat(ASSIGN);
+        expr();
+        eat(TO);
+        expr();
+        while (current_token.type != END) {
+            skip_statement();
+        }
+        eat(END);
+    }
+
+    void skip_while_statement() {
+        eat(WHILE);
         condition();
         eat(THEN);
         while (current_token.type != END) {
@@ -318,24 +348,21 @@ public:
         }
     }
 
-    // Added short circuit eval
     bool condition() {
         bool left = simple_condition();
         while (current_token.type == AND || current_token.type == OR) {
             Token token = current_token;
             if (token.type == AND) {
                 eat(AND);
-                // Only evaluate right side if left is true
                 if (!left) {
-                    skip_condition(); // Skip evaluating the right side
+                    skip_condition();
                 } else {
                     left = simple_condition();
                 }
             } else if (token.type == OR) {
                 eat(OR);
-                // Only evaluate right side if left is false
                 if (left) {
-                    skip_condition(); // Skip evaluating the right side
+                    skip_condition();
                 } else {
                     left = simple_condition();
                 }
@@ -344,16 +371,76 @@ public:
         return left;
     }
 
-    // Helper method to skip over a condition without evaluating it
     void skip_condition() {
-        expr(); // Skip the left expression
-        // Skip the comparison operator
+        expr();
         if (current_token.type == EQUAL_TO || current_token.type == NOT_EQUAL_TO ||
             current_token.type == GREATER_THAN || current_token.type == LESS_THAN ||
             current_token.type == GREATER_THAN_OR_EQUAL_TO || current_token.type == LESS_THAN_OR_EQUAL_TO) {
             eat(current_token.type);
-            expr(); // Skip the right expression
+            expr();
         }
+    }
+
+    void while_statement() {
+        eat(WHILE);
+        
+        size_t condition_pos = lexer.pos;
+        Token condition_token = current_token;
+        
+        bool cond_result = condition();
+        eat(THEN);
+        
+        while (cond_result) {
+            while (current_token.type != END) {
+                statement();
+            }
+            
+            lexer.pos = condition_pos;
+            lexer.current_char = lexer.text[lexer.pos];
+            current_token = condition_token;
+            
+            cond_result = condition();
+            eat(THEN);
+        }
+        
+        while (current_token.type != END) {
+            skip_statement();
+        }
+        eat(END);
+    }
+
+    void for_statement() {
+        eat(FOR);
+        std::string var_name = current_token.value;
+        eat(ID);
+        eat(ASSIGN);
+        int start = expr();
+        eat(TO);
+        int end = expr();
+        
+        symbolTable.addOrUpdate(var_name, "INTEGER", std::to_string(start));
+        
+        size_t loop_start_pos = lexer.pos;
+        Token loop_start_token = current_token;
+        
+        while (std::stoi(symbolTable.get(var_name)->value) <= end) {
+            size_t current_pos = lexer.pos;
+            Token current_token_save = current_token;
+            
+            while (current_token.type != END) {
+                statement();
+            }
+            
+            int current_val = std::stoi(symbolTable.get(var_name)->value);
+            symbolTable.addOrUpdate(var_name, "INTEGER", std::to_string(current_val + 1));
+            
+            if (current_val < end) {
+                lexer.pos = loop_start_pos;
+                lexer.current_char = lexer.text[lexer.pos];
+                current_token = loop_start_token;
+            }
+        }
+        eat(END);
     }
 
     void if_statement() {
@@ -403,6 +490,10 @@ public:
     void statement() {
         if (current_token.type == IF) {
             if_statement();
+        } else if (current_token.type == FOR) {
+            for_statement();
+        } else if (current_token.type == WHILE) {
+            while_statement();
         } else if (current_token.type == ID) {
             assignment();
         } else if (current_token.type == PRINT) {
