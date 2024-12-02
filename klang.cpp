@@ -16,9 +16,9 @@ enum TokenType {
 class Token {
 public:
     TokenType type;
-    std::string value;
+    std::string value; // Value is used for INTEGER tokens
 
-    Token(const TokenType type_, std::string value_) : type(type_), value(value_) {}
+    Token(const TokenType type_, std::string value_) : type(type_), value(value_) {} 
 
     void print() const {
         std::cout << "Token(" << type << ", " << value << ")" << std::endl;
@@ -27,12 +27,13 @@ public:
 
 class Lexer {
 public:
-    std::string text;
-    size_t pos;
-    char current_char;
+    std::string text; // Input code from the test.txt file
+    size_t pos; // Current position in the text
+    char current_char; // Current character being analyzed
 
     Lexer(const std::string& text_) : text(text_), pos(0), current_char(text[pos]) {}
 
+    // Method to advance the 'pos' pointer and set the 'current_char' variable
     void advance() {
         pos++;
         current_char = (pos >= text.size()) ? '\0' : text[pos];
@@ -44,6 +45,7 @@ public:
         }
     }
 
+    // Method to create an integer from a sequence of digits. (Ex. 123 will become INTEGER(123) instead of INTEGER(1), INTEGER(2), INTEGER(3))
     int integer() {
         std::string result;
         while (current_char != '\0' && std::isdigit(current_char)) {
@@ -60,6 +62,7 @@ public:
             advance();
         }
 
+        // Check if the identifier is a keyword in the language
         static const std::unordered_map<std::string, TokenType> keywords = {
             {"print", PRINT},
             {"if", IF},
@@ -75,7 +78,8 @@ public:
         auto it = keywords.find(id);
         return it != keywords.end() ? Token(it->second, id) : Token(ID, id);
     }
-
+    
+    // Handles cases when an operator is found and only returns that type of token
     Token handle_operator() {
         char op = current_char;
         advance();
@@ -163,23 +167,27 @@ public:
     }
 };
 
+
 class SymbolTable {
 public:
+
+    // Information about a variable to be stored in the symbol table
     struct Entry {
         std::string type;
         std::string value;
-    };
+    }; 
 
 private:
-    std::unordered_map<std::string, Entry> table;
+    std::unordered_map<std::string, Entry> table; // A vector made up of entries
 
 public:
+
     void addOrUpdate(const std::string& name, const std::string& type, const std::string& value) {
         if (table.find(name) != table.end() && table[name].type != type) {
             throw std::runtime_error("Type mismatch for variable: " + name);
         }
         table[name] = {type, value};
-    }
+    } // Checks if the variable is already in the table. If not a new entry is added, and if not the existing entry is updated.
 
     std::optional<Entry> get(const std::string& name) const {
         auto it = table.find(name);
@@ -187,11 +195,13 @@ public:
             return it->second;
         }
         return std::nullopt;
-    }
+    } // The get method is to retrieve the value of a variable from the table. It will return std::nullopt if the variable is not in the table.
 };
 
 class Parser {
 private:
+
+    // Skips over a statement that doesn't need to be executed(Ex. false consition)
     void skip_statement() {
         if (current_token.type == IF) {
             skip_if_statement();
@@ -216,6 +226,8 @@ private:
         }
     }
 
+
+    // Skips if statement if the condition is false
     void skip_if_statement() {
         eat(IF);
         condition();
@@ -226,6 +238,7 @@ private:
         eat(END);
     }
 
+    // Skips for loop if condition is not met
     void skip_for_statement() {
         eat(FOR);
         eat(ID);
@@ -239,6 +252,7 @@ private:
         eat(END);
     }
 
+    // Skips while loop the condition is not met.
     void skip_while_statement() {
         eat(WHILE);
         condition();
@@ -257,6 +271,7 @@ public:
     Parser(Lexer lexer_, SymbolTable& symbolTable_) 
         : lexer(lexer_), current_token(lexer.get_next_token()), symbolTable(symbolTable_) {}
 
+    // Consumes the current token if it matches the expected token type
     void eat(TokenType token_type) {
         if (current_token.type == token_type) {
             current_token = lexer.get_next_token();
@@ -265,6 +280,11 @@ public:
         }
     }
 
+    /* 
+    Method to evaluate expressions and the result. 
+    If the token type is INTEGER it will get the value from the token. 
+    If the type is ID it will look up the variable in the symbol table and use that value in evaluating expressions.
+    */  
     int factor() {
         Token token = current_token;
         if (token.type == INTEGER) {
@@ -286,6 +306,7 @@ public:
         throw std::runtime_error("Syntax error in factor");
     }
 
+    // Returns a term that can be added, subtracted, multiplied, or divided. It starts by evaluating a factor and storing the result
     int term() {
         int result = factor();
         while (current_token.type == MUL || current_token.type == DIV) {
@@ -305,6 +326,11 @@ public:
         return result;
     }
 
+    /* 
+    Evaluates the expression by adding or subtracting terms. 
+    It starts by evaluating a term and storing the result. 
+    It then checks if the current token is a plus or minus operator and adds or subtracts the next term accordingly. 
+    */
     int expr() {
         int result = term();
         while (current_token.type == PLUS || current_token.type == MINUS) {
@@ -320,6 +346,12 @@ public:
         return result;
     }
 
+    /*
+    Evaluates a simple condition by comparing two expressions with a comparison operator.
+    It starts by evaluating the left expression and storing the result in the 'left' variable.
+    It then checks the current token type and compares the left expression with the right expression.
+    If the operator is not recognized, it will throw a runtime error.
+    */
     bool simple_condition() {
         int left = expr();
         TokenType op = current_token.type;
@@ -348,6 +380,12 @@ public:
         }
     }
 
+    /*
+    Evaluates conditional expressions that use more complex operators like AND and OR. 
+    It builds on the simple_condition method my evaluating the left expression and storing the result in the 'left' variable. 
+    It uses short circut evaluation by evaluating the left side of the expression first. 
+    If the left side is false and the operator is AND, it will skip the right side by using the skip_condition method. 
+    */
     bool condition() {
         bool left = simple_condition();
         while (current_token.type == AND || current_token.type == OR) {
@@ -371,6 +409,10 @@ public:
         return left;
     }
 
+    /*
+    This method is used to skip over a conditional expression without evaluating the result. 
+    This is implemented in short circut evaluation 
+    */
     void skip_condition() {
         expr();
         if (current_token.type == EQUAL_TO || current_token.type == NOT_EQUAL_TO ||
@@ -381,6 +423,12 @@ public:
         }
     }
 
+    /*
+    This method begind by consuming a WHILE token and storing the position and token in the 'condition_pos' and 'condition_token' variables.
+    It then evaluates the loop condition by calling the condition method, which results a boolean result. 
+    It then condumes the THEN token and enters a while loop that will continue to execute the statements until the loop condition is false.
+    It will excecute all the statements until it reached an END token.
+    */
     void while_statement() {
         eat(WHILE);
         
@@ -409,6 +457,13 @@ public:
         eat(END);
     }
 
+    /*
+    This method consumes a FOR token and stores the variable name in the 'var_name' variable.
+    It is responsible for starting the excecution of a for loop. The method evaluates the starting expression using the expr method and stores the result in the start variable.
+    It then consumes the TO token and evaluates the ending expression, storing the result in the end variable.
+    The method enters a while loop that will continue to execute the statements until the loop condition is false.
+    After the loop condition evaluates to false, the loop will end.
+    */
     void for_statement() {
         eat(FOR);
         std::string var_name = current_token.value;
@@ -443,6 +498,10 @@ public:
         eat(END);
     }
 
+    /*
+    This method consumes an IF token once encountered and evaluates the condition using the condition method and stores the boolean value in the 'cond_result' variable.
+    It then consumes the THEN token and if the cond_result is true, it will execute all the statements until it reaches the END token.
+    */
     void if_statement() {
         eat(IF);
         bool cond_result = condition();
@@ -460,6 +519,10 @@ public:
         eat(END);
     }
 
+    /* 
+    If a variable is encountered, the ID token (variable) is consumed and the ASSIGN token is consumed.
+    It then evaluates the expression or value using the 'expr' method and stores the variable in the symbol table via the addOrUpdate method.
+    */
     void assignment() {
         std::string var_name = current_token.value;
         eat(ID);
@@ -468,6 +531,12 @@ public:
         symbolTable.addOrUpdate(var_name, "INTEGER", std::to_string(result));
     }
 
+    /* 
+    If a PRINT token is encountered followed by an LPAREN token, the method will evaluate the expression using the 'expr' method until the RPAREN token is encountered.
+    The method will print the value of the expression to the console.
+    The 'first' variable is used to determine if a space is needed between the values.
+    It can handle multiple expressions seperated by commas.
+    */
     void print_function() {
         eat(PRINT);
         eat(LPAREN);
@@ -487,6 +556,10 @@ public:
         std::cout << std::endl;
     }
 
+    /*
+    This method handles the execution of different statements in the source code. It determines the type of statement and calls the respective method.
+    If the current token doesnt match any of these, it will throw a runtime error.
+    */
     void statement() {
         if (current_token.type == IF) {
             if_statement();
@@ -505,8 +578,7 @@ public:
 };
 
 int main() {
-    std::string file_path;
-    std::cout << "Enter the path to your source file: ";
+    std::string file_path; // ./test.txt
     std::cin >> file_path;
 
     std::ifstream file(file_path);
@@ -521,7 +593,7 @@ int main() {
     try {
         Lexer lexer(text);
         SymbolTable symbolTable;
-        Parser parser(lexer, symbolTable);
+        Parser parser(lexer, symbolTable); // The parser takes the lexer and symbol table as arguments because it needs to access the lexer to get tokens and the symbol table to store variables.
 
         while (parser.current_token.type != EOF_TOKEN) {
             parser.statement();
