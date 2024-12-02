@@ -15,12 +15,7 @@ if x > y then
     print(x) 
 end
 if a == 5 or a > b then 
-    print(x) 
-end
-if a == 1 and a < b then 
-    print(x) 
-end
-if a == 1 and a > b then 
-    print(x) 
-end
+print(x) end
+if a == 1 and a < b then print(x) end
+if a == 1 and a > b then print(x) end
 print(x + y)

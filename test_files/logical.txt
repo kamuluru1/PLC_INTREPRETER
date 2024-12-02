@@ -1,0 +1,19 @@
+x = 10
+y = 5
+z = 15
+
+if x > y and x < z then
+    print(1)
+end
+
+if x < y or x < z then
+    print(2)
+end
+
+if x > y and y < z and z > x then
+    print(3)
+end
+
+if x < y or y > z or x < z then
+    print(4)
+end

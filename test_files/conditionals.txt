@@ -1,0 +1,22 @@
+x = 10
+y = 5
+
+if x > y then
+    print(1)
+end
+
+if x == 10 then
+    print(2)
+end
+
+if x >= 10 then
+    print(3)
+end
+
+if x != y then
+    print(4)
+end
+
+if x <= 10 then
+    print(5)
+end
