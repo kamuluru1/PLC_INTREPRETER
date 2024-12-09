@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <memory>
 
+
+
 enum TokenType {
     INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF_TOKEN, ID, ASSIGN, COMMA, PRINT,
     EQUAL_TO, NOT_EQUAL_TO, GREATER_THAN, LESS_THAN, GREATER_THAN_OR_EQUAL_TO, LESS_THAN_OR_EQUAL_TO,
@@ -187,7 +189,8 @@ public:
     }
 };
 
-// Forward declarations for AST nodes
+// Declarations for all possible AST node types
+// Each type represents a different language construct
 class AST;
 class BinaryOpNode;
 class NumberNode;
@@ -200,9 +203,11 @@ class ForNode;
 class ComparisonNode;
 class LogicalOpNode;
 
-// Visitor interface
+// Visitor interface for the Visitor pattern (tells the program how to handle each AST node)
 class ASTVisitor {
 public:
+    // Defining each visit operations for the AST node type
+    // 
     virtual void visit(BinaryOpNode* node) = 0;
     virtual void visit(NumberNode* node) = 0;
     virtual void visit(VariableNode* node) = 0;
@@ -216,14 +221,14 @@ public:
     virtual ~ASTVisitor() = default;
 };
 
-// Base AST node class
+// The base class for all the AST nodes 
 class AST {
 public:
     virtual ~AST() = default;
     virtual void accept(ASTVisitor& visitor) = 0;
 };
 
-// Node implementations
+// Binary operations in the AST node
 class BinaryOpNode : public AST {
 public:
     TokenType op;
@@ -238,67 +243,83 @@ public:
     }
 };
 
+// Node type that represents actual numbers in the code
 class NumberNode : public AST {
 public:
-    int value;
+    int value; // Stores actual int value for example when parsing 42 this will hold int 42
 
+    // Constructor takes the int and stores its value
     explicit NumberNode(int value_) : value(value_) {}
 
+    // Visitor patten tells the visitor that its a number node and this how to handle it
     void accept(ASTVisitor& visitor) override {
         visitor.visit(this);
     }
 };
 
+// Used for variable references in expressions 
+// For example using x in x + 1
 class VariableNode : public AST {
 public:
     std::string name;
 
     explicit VariableNode(std::string name_) : name(std::move(name_)) {}
 
+    // Visitor patten tells the visitor what type of node and how to handle it
     void accept(ASTVisitor& visitor) override {
         visitor.visit(this);
     }
 };
 
+// Assignment operation node 
+// For example x = 5
 class AssignNode : public AST {
 public:
-    std::string name;
-    std::unique_ptr<AST> value;
+    std::string name; // Target var
+    std::unique_ptr<AST> value; // Expression assigned
 
     AssignNode(std::string name_, std::unique_ptr<AST> value_)
         : name(std::move(name_)), value(std::move(value_)) {}
 
+     // Visitor patten tells the visitor what type of node and how to handle it
     void accept(ASTVisitor& visitor) override {
         visitor.visit(this);
     }
 };
 
+// Represents print statements
+// Used for printing 
 class PrintNode : public AST {
 public:
-    std::vector<std::unique_ptr<AST>> expressions;
+    std::vector<std::unique_ptr<AST>> expressions; // Expressions to output
 
     explicit PrintNode(std::vector<std::unique_ptr<AST>> expressions_)
         : expressions(std::move(expressions_)) {}
 
+    // Visitor patten tells the visitor what type of node and how to handle it
     void accept(ASTVisitor& visitor) override {
         visitor.visit(this);
     }
 };
 
+// Comparison operations for example x > y
 class ComparisonNode : public AST {
 public:
-    TokenType op;
-    std::unique_ptr<AST> left;
-    std::unique_ptr<AST> right;
+    TokenType op; // Operator
+    std::unique_ptr<AST> left; // Left expression
+    std::unique_ptr<AST> right; // Right expression
 
     ComparisonNode(TokenType op_, std::unique_ptr<AST> left_, std::unique_ptr<AST> right_)
         : op(op_), left(std::move(left_)), right(std::move(right_)) {}
 
+    // Visitor patten tells the visitor what type of node and how to handle it
     void accept(ASTVisitor& visitor) override {
         visitor.visit(this);
     }
 };
 
+
+// Logical operations for example  x and y, a or b
 class LogicalOpNode : public AST {
 public:
     TokenType op;
@@ -308,49 +329,56 @@ public:
     LogicalOpNode(TokenType op_, std::unique_ptr<AST> left_, std::unique_ptr<AST> right_)
         : op(op_), left(std::move(left_)), right(std::move(right_)) {}
 
+    // Visitor patten tells the visitor what type of node and how to handle it
     void accept(ASTVisitor& visitor) override {
         visitor.visit(this);
     }
 };
 
+// If statements for example if x > 0
 class IfNode : public AST {
 public:
-    std::unique_ptr<AST> condition;
-    std::vector<std::unique_ptr<AST>> body;
+    std::unique_ptr<AST> condition; // Booleen condition
+    std::vector<std::unique_ptr<AST>> body; // statements in tbe if block
 
     IfNode(std::unique_ptr<AST> condition_, std::vector<std::unique_ptr<AST>> body_)
         : condition(std::move(condition_)), body(std::move(body_)) {}
-
+    
+    // Visitor patten tells the visitor what type of node and how to handle it
     void accept(ASTVisitor& visitor) override {
         visitor.visit(this);
     }
 };
 
+// While loops for exmaple while x < 10
 class WhileNode : public AST {
 public:
-    std::unique_ptr<AST> condition;
-    std::vector<std::unique_ptr<AST>> body;
+    std::unique_ptr<AST> condition; // Condtion of the loop
+    std::vector<std::unique_ptr<AST>> body; // Body of the loop
 
     WhileNode(std::unique_ptr<AST> condition_, std::vector<std::unique_ptr<AST>> body_)
         : condition(std::move(condition_)), body(std::move(body_)) {}
-
+    
+    // Visitor patten tells the visitor what type of node and how to handle it
     void accept(ASTVisitor& visitor) override {
         visitor.visit(this);
     }
 };
 
+// For loops for example for i = 1 to 10
 class ForNode : public AST {
 public:
-    std::string var_name;
-    std::unique_ptr<AST> start;
-    std::unique_ptr<AST> end;
-    std::vector<std::unique_ptr<AST>> body;
+    std::string var_name; // Interator var
+    std::unique_ptr<AST> start; // Intial value
+    std::unique_ptr<AST> end; // End value
+    std::vector<std::unique_ptr<AST>> body; // Body of the loop
 
     ForNode(std::string var_name_, std::unique_ptr<AST> start_, std::unique_ptr<AST> end_,
             std::vector<std::unique_ptr<AST>> body_)
         : var_name(std::move(var_name_)), start(std::move(start_)), end(std::move(end_)),
           body(std::move(body_)) {}
 
+    // Visitor patten tells the visitor what type of node and how to handle it
     void accept(ASTVisitor& visitor) override {
         visitor.visit(this);
     }
