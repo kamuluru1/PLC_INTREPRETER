@@ -26,6 +26,8 @@ public:
     }
 };
 
+
+/* Converts string input into a stream of tokens. */
 class Lexer {
 public:
     std::string text;
@@ -34,17 +36,20 @@ public:
 
     Lexer(const std::string& text_) : text(text_), pos(0), current_char(text[pos]) {}
 
+    // Advance the 'pos' pointer and set the 'current_char' variable
     void advance() {
         pos++;
         current_char = (pos >= text.size()) ? '\0' : text[pos];
     }
 
+    // Skip whitespace characters in the text
     void skip_whitespace() {
         while (current_char != '\0' && std::isspace(current_char)) {
             advance();
         }
     }
 
+    //Returns an integer from the input. Can be multiple digits. For example 123 is just 1 INTEGER token with value 123 instead of 3 INTEGER tokens with values 1, 2, 3.
     int integer() {
         std::string result;
         while (current_char != '\0' && std::isdigit(current_char)) {
@@ -54,6 +59,7 @@ public:
         return std::stoi(result);
     }
 
+    //Handles variable declarations. Variables can only contain letters and underscores. For example, a is an ID token with value a, but a1 is two ID tokens with values a and 1.
     Token handle_identifier() {
         std::string id;
         while (current_char != '\0' && (std::isalnum(current_char) || current_char == '_')) {
@@ -77,6 +83,7 @@ public:
         return it != keywords.end() ? Token(it->second, id) : Token(ID, id);
     }
 
+    //Returns tokens for the respective operators. For example, == is an EQUAL_TO token, but = is an ASSIGN token.
     Token handle_operator() {
         char op = current_char;
         advance();
@@ -110,6 +117,7 @@ public:
         throw std::runtime_error(std::string("Invalid operator: ") + op);
     }
 
+    //Method to get the next token from the input. It will return an EOF (end of file) token when the input has been fully processed. 
     Token get_next_token() {
         while (current_char != '\0') {
             if (std::isspace(current_char)) {
@@ -160,8 +168,11 @@ public:
     }
 };
 
+//
 class SymbolTable {
 public:
+
+    //Entry struct to store the type and value of a variable.
     struct Entry {
         std::string type;
         std::string value;
@@ -171,6 +182,8 @@ private:
     std::unordered_map<std::string, Entry> table;
 
 public:
+
+    //When it encounters a new variable, it will check if it already exists in the symbol table. If it does, it will update the existing one. If not then it will add a new entry. 
     void addOrUpdate(const std::string& name, const std::string& type, const std::string& value) {
         if (table.find(name) != table.end() && table[name].type != type) {
             throw std::runtime_error("Type mismatch for variable: " + name);
@@ -178,6 +191,7 @@ public:
         table[name] = {type, value};
     }
 
+    //Retrieves a variable from the table. If it doesn't exist, it will return an empty optional.
     std::optional<Entry> get(const std::string& name) const {
         auto it = table.find(name);
         if (it != table.end()) {
@@ -508,6 +522,7 @@ private:
     Token current_token;
     SymbolTable& symbolTable;
 
+    //Consumes the current token if it matches the expected token_type. If not, it will throw a runtime error. 
     void eat(TokenType token_type) {
         if (current_token.type == token_type) {
             current_token = lexer.get_next_token();
@@ -516,6 +531,11 @@ private:
         }
     }
 
+    /*
+    This method parses a factor, which can be an integer, variable, or an expression in parentheses and returns a unique pointer to the AST node that represents the factor. 
+    If the current token is an INTEGER, it consumes the token and returns a NumberNode. 
+    If the token is an identifier, it consumes it and returns a VariableNode. If the token is LPAREN, it consumes the token, parses the expression and expects a RPAREN to follow.
+    */
     std::unique_ptr<AST> factor() {
         Token token = current_token;
         if (token.type == INTEGER) {
@@ -533,6 +553,11 @@ private:
         throw std::runtime_error("Syntax error in factor");
     }
 
+    /*
+    This method parses a term, which is a factor followed by multiplication or division operations. 
+    While the current token is a multiplication or division operator, it consumes the operator and the next factor, creating a BinaryOpNode for each operation. 
+    It returns a unique pointer to the AST node that represents that term. 
+    */ 
     std::unique_ptr<AST> term() {
         auto node = factor();
 
@@ -544,6 +569,11 @@ private:
         return node;
     }
 
+    /*
+    This method parses an expression, which is a term followed by addition or subtraction operations. 
+    While the current token is an addition or subtraction operator, it consumes the operator and the next term, creating a BinaryOpNode for each operation. 
+    It then returns a unique pointer to the AST node representing the expression. 
+    */
     std::unique_ptr<AST> expr() {
         auto node = term();
 
@@ -555,6 +585,11 @@ private:
         return node;
     }
 
+    /*
+    This method parses a simple condition, which is an expression followed by a comparison operator and another expression. 
+    It checks if the current token is a comparison operator. If it is, it consumes the operator and the next expression, creating a ComparisonNode. 
+    It returns a unique pointer to the AST node that represents the condition.
+    */
     std::unique_ptr<AST> simple_condition() {
         auto left = expr();
         TokenType op = current_token.type;
@@ -573,6 +608,13 @@ private:
         }
     }
 
+    /*
+    This method parses a condition in an abstract syntax tree (AST), which can be a simple condition potentially followed by logical AND or OR operations. 
+    It starts by parsing a simple condition and assigns it to the node variable. 
+    Then, while the current token represents a logical AND or OR operator, the method consumes the operator, 
+    creates a new logical operation node LogicalOpNode using std::make_unique, and updates the node by linking it to the newly parsed condition.
+    Finally, it returns a unique pointer to the resulting AST node.
+    */
     std::unique_ptr<AST> condition() {
         auto node = simple_condition();
 
@@ -584,6 +626,11 @@ private:
         return node;
     }
 
+    /*
+     This method parses an if statement by first consuming the IF token and parsing the associated condition. 
+     After consuming the THEN token, it processes the body of the if statement by repeatedly parsing individual statements and adding them to a vector until the END token is encountered. 
+     Finally, it consumes the END token and returns a unique pointer to an IfNode representing the entire if statement, comprising the condition and the body.
+    */
     std::unique_ptr<AST> if_statement() {
         eat(IF);
         auto cond = condition();
@@ -598,6 +645,11 @@ private:
         return std::make_unique<IfNode>(std::move(cond), std::move(body));
     }
 
+    /*
+    This method parses a while statement by consuming the WHILE token and parsing the associated condition using the condition() method. 
+    It then consumes the THEN token and parses the body of the while loop by repeatedly processing statements and adding them to a vector until the END token is encountered. 
+    Finally, it consumes the END token and returns a unique pointer to a WhileNode representing the complete while statement, which includes the condition and the loop body.
+    */
     std::unique_ptr<AST> while_statement() {
         eat(WHILE);
         auto cond = condition();
@@ -612,6 +664,12 @@ private:
         return std::make_unique<WhileNode>(std::move(cond), std::move(body));
     }
 
+    /*
+    This method parses a for statement by consuming the FOR token and retrieving the variable name from the current token. 
+    It then consumes the ASSIGN token, parses the start expression, and consumes the TO token to parse the end expression. 
+    Afterward, it processes the body of the for loop by parsing individual statements and adding them to a vector until the END token is encountered. 
+    Finally, it consumes the END token and returns a unique pointer to a ForNode representing the complete for statement, including the variable, start expression, end expression, and body.
+    */
     std::unique_ptr<AST> for_statement() {
         eat(FOR);
         std::string var_name = current_token.value;
@@ -630,6 +688,11 @@ private:
         return std::make_unique<ForNode>(std::move(var_name), std::move(start), std::move(end), std::move(body));
     }
 
+    /*
+    This method parses a print statement by consuming the PRINT token and the left parenthesis, followed by parsing the first expression and adding it to a vector of expressions. 
+    While the current token is a comma, it consumes the comma and parses subsequent expressions, adding each to the vector. 
+    After all expressions are processed, it consumes the right parenthesis and returns a unique pointer to a PrintNode representing the print statement with the list of parsed expressions.
+    */
     std::unique_ptr<AST> print_statement() {
         eat(PRINT);
         eat(LPAREN);
@@ -645,6 +708,11 @@ private:
         return std::make_unique<PrintNode>(std::move(expressions));
     }
 
+    /*
+    This method parses an assignment statement in an abstract syntax tree (AST) by retrieving the variable name from the current token and then consuming the ID and ASSIGN tokens. 
+    It subsequently parses the assigned expression and returns a unique pointer to an AssignNode that represents the assignment statement, 
+    linking the variable name to the parsed expression.
+    */
     std::unique_ptr<AST> assignment_statement() {
         std::string var_name = current_token.value;
         eat(ID);
@@ -660,6 +728,7 @@ public:
         return current_token.type;
     }
 
+    /*Parses a statement, which can be if, for, while, assign or print.*/
     std::unique_ptr<AST> statement() {
         switch (current_token.type) {
             case IF:
