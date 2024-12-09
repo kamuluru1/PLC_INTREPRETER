@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <memory>
 
+
+
 enum TokenType {
     INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF_TOKEN, ID, ASSIGN, COMMA, PRINT,
     EQUAL_TO, NOT_EQUAL_TO, GREATER_THAN, LESS_THAN, GREATER_THAN_OR_EQUAL_TO, LESS_THAN_OR_EQUAL_TO,
@@ -201,7 +203,8 @@ public:
     }
 };
 
-// Forward declarations for AST nodes
+// Declarations for all possible AST node types
+// Each type represents a different language construct
 class AST;
 class BinaryOpNode;
 class NumberNode;
@@ -214,7 +217,8 @@ class ForNode;
 class ComparisonNode;
 class LogicalOpNode;
 
-// Visitor interface
+// Visitor interface for the Visitor pattern
+// This allows us to add new operations on AST nodes without modifying the nodes
 class ASTVisitor {
 public:
     virtual void visit(BinaryOpNode* node) = 0;
